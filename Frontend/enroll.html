@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardian Console — Device enrollment</title>
+<style>
+  :root { --bg:#f4f6f5; --surface:#fff; --border:#d7dde0; --ink:#17221f; --ink-dim:#5b6b66; --accent:#2f6f5e; --accent-ink:#fff; --good:#2f8f52; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111615; --surface:#182020; --border:#2b3634; --ink:#e8ece9; --ink-dim:#93a39c; --accent:#5cb89a; --accent-ink:#0b1513; --good:#5cb878; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:-apple-system,'Segoe UI',sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:26px; }
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 14%, transparent); padding:4px 10px; border-radius:999px; margin-bottom:14px; }
+  h1 { font-size:18px; margin:0 0 6px; }
+  p.sub { color:var(--ink-dim); font-size:13px; margin:0 0 18px; }
+  .scope { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border); font-size:13px; }
+  .scope:first-of-type { border-top:none; }
+  .scope b { display:block; font-size:13px; }
+  .scope span.d { color:var(--ink-dim); font-size:12px; }
+  .ok { color:var(--good); flex-shrink:0; margin-top:1px; }
+  .notice { font-size:12px; color:var(--ink-dim); margin-top:16px; border-top:1px solid var(--border); padding-top:14px; }
+  button { width:100%; margin-top:18px; padding:12px; border-radius:9px; border:1px solid var(--accent); background:var(--accent);
+    color:var(--accent-ink); font-weight:600; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.6; }
+  .error { color:#b5433a; font-size:13px; margin-top:14px; }
+  .done { text-align:center; }
+  .done .tick { width:52px; height:52px; border-radius:50%; background:var(--good); color:#fff; font-size:26px;
+    display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+  .persist-banner { margin-top:14px; font-size:12px; background:var(--bg); border:1px dashed var(--border); border-radius:9px; padding:10px 12px; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">Loading…</div>
+
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('token');
+  var SCOPE_LABELS = {
+    app_list: ['Installed apps & screen time', "Which apps are installed and how long they're used each day."],
+    location: ['Approximate location', 'Where this device is, to show on the family map and trigger place alerts.'],
+    web_filter: ['Web filtering', 'Sites are filtered in the managed browser and visit counts by site are shared, not full page-by-page history.'],
+    screen_time: ['Screen time controls', 'Daily limits and downtime schedules can be set remotely.']
+  };
+
+  var card = document.getElementById('card');
+
+  function render(html){ card.innerHTML = html; }
+
+  function renderError(msg){
+    render('<h1>Can\'t continue</h1><p class="error">' + msg + '</p>');
+  }
+
+  if (!token) {
+    renderError('This page needs an enrollment link from a parent — ask them to generate one again.');
+  } else {
+    fetch('/api/enroll/' + encodeURIComponent(token))
+      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+      .then(function(res){
+        if (!res.ok) return renderError(res.body.error || 'This link is no longer valid.');
+        renderConsent(res.body);
+      })
+      .catch(function(){ renderError('Could not reach the server.'); });
+  }
+
+  function renderConsent(info){
+    var scopesHtml = info.scopes.map(function(s){
+      var l = SCOPE_LABELS[s] || [s, ''];
+      return '<div class="scope"><span class="ok">&#10003;</span><div><b>' + l[0] + '</b><span class="d">' + l[1] + '</span></div></div>';
+    }).join('');
+
+    render(
+      '<span class="badge">PARENTAL CONTROL ENROLLMENT</span>' +
+      '<h1>Set up for ' + escapeHtml(info.childName) + '</h1>' +
+      '<p class="sub">' + (info.parentEmail ? escapeHtml(info.parentEmail) : 'A parent') + ' is asking to manage this device. Review what will be visible before continuing.</p>' +
+      scopesHtml +
+      '<div class="notice">A persistent "This device is managed" notice will stay visible on this device the whole time this is active. It can be turned off from this device\'s settings at any point, and the parent will be notified.</div>' +
+      '<button id="confirmBtn">Confirm & enable</button>' +
+      '<div class="error" id="err"></div>'
+    );
+
+    document.getElementById('confirmBtn').addEventListener('click', function(){
+      var btn = document.getElementById('confirmBtn');
+      btn.disabled = true;
+      fetch('/api/enroll/' + encodeURIComponent(token) + '/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios' : 'android', scopes: info.scopes })
+      }).then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+        .then(function(res){
+          if (!res.ok) { document.getElementById('err').textContent = res.body.error || 'Something went wrong.'; btn.disabled = false; return; }
+          renderDone(info.childName);
+        })
+        .catch(function(){ document.getElementById('err').textContent = 'Could not reach the server.'; btn.disabled = false; });
+    });
+  }
+
+  function renderDone(childName){
+    render(
+      '<div class="done">' +
+      '<div class="tick">&#10003;</div>' +
+      '<h1>Enrolled</h1>' +
+      '<p class="sub">This device now appears in the parent dashboard for ' + escapeHtml(childName) + '.</p>' +
+      '<div class="persist-banner">On a real device this would show a permanent "Managed by [parent]" notice in Settings. In this demo, nothing further is installed on this browser.</div>' +
+      '</div>'
+    );
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+</script>
+</body>
+</html>
+  
