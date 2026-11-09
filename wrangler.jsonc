@@ -1,3 +1,4 @@
+
 {
   "name": "guardian-console",
   "main": "worker.js",
@@ -16,5 +17,21 @@
       "database_id": "0783293d-ef2d-4e6e-9fd4-601978735a23",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true
+    },
+    "issue_detection": {
+      "enabled": false
+    }
+  }
 }
