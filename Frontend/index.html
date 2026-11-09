@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Guardian Console</title>
+<style>
+:root {
+  --bg: #f4f6f5; --surface: #ffffff; --surface-2: #eceff1; --border: #d7dde0;
+  --ink: #17221f; --ink-dim: #5b6b66; --accent: #2f6f5e; --accent-ink: #ffffff;
+  --good: #2f8f52; --warn: #b8791a; --crit: #b5433a; --focus: #2f6f5e;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#111615; --surface:#182020; --surface-2:#1f2928; --border:#2b3634; --ink:#e8ece9; --ink-dim:#93a39c;
+    --accent:#5cb89a; --accent-ink:#0b1513; --good:#5cb878; --warn:#d9a04b; --crit:#e07a71; --focus:#5cb89a; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,'Segoe UI',sans-serif; font-size:14px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); padding-block:16px; }
+h1,h2,h3 { font-weight:600; margin:0; }
+.mono { font-variant-numeric: tabular-nums; }
+button { font: inherit; }
+:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+
+.app { max-width:1180px; margin:0 auto; display:grid; grid-template-columns:260px 1fr; gap:18px; }
+@media (max-width:760px) { .app { grid-template-columns:1fr; } }
+
+.topbar { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:14px; margin-bottom:4px; border-bottom:1px solid var(--border); }
+.brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:16px; }
+.brand .mark { width:28px; height:28px; border-radius:7px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; }
+.acct { display:flex; align-items:center; gap:10px; color:var(--ink-dim); font-size:13px; }
+.acct button { background:none; border:1px solid var(--border); border-radius:8px; padding:5px 10px; color:var(--ink-dim); cursor:pointer; font-size:12px; }
+
+.rail { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.rail-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; }
+.rail-title { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 8px 2px; }
+.child-card { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:9px; cursor:pointer; border:1px solid transparent; background:none; width:100%; text-align:left; color:var(--ink); }
+.child-card:hover { background:var(--surface-2); }
+.child-card.active { background:var(--surface-2); border-color:var(--border); }
+.child-avatar { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--accent); color:var(--accent-ink); font-weight:700; font-size:13px; }
+.child-meta { min-width:0; flex:1; }
+.child-name { font-weight:600; font-size:13.5px; }
+.child-sub { color:var(--ink-dim); font-size:12px; display:flex; align-items:center; gap:5px; }
+.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.dot.active { background:var(--good); } .dot.pending { background:var(--warn); } .dot.revoked { background:var(--ink-dim); }
+.add-device-btn { display:flex; align-items:center; justify-content:center; gap:7px; width:100%; padding:9px; border-radius:9px; border:1px dashed var(--border); background:none; color:var(--ink-dim); cursor:pointer; font-size:13px; margin-top:2px; }
+.add-device-btn:hover { border-color:var(--accent); color:var(--accent); }
+.nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:9px; cursor:pointer; border:none; background:none; width:100%; text-align:left; color:var(--ink-dim); font-size:13.5px; }
+.nav-item:hover { background:var(--surface-2); color:var(--ink); }
+.nav-item.active { background:var(--accent); color:var(--accent-ink); font-weight:600; }
+
+.main { min-width:0; display:flex; flex-direction:column; gap:16px; }
+.view { display:none; flex-direction:column; gap:16px; }
+.view.active { display:flex; }
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
+.panel-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.panel-head h2 { font-size:15px; }
+.panel-head .hint { color:var(--ink-dim); font-size:12px; }
+.stat-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+.stat { border:1px solid var(--border); border-radius:10px; padding:11px 12px; background:var(--surface-2); min-width:0; }
+.stat .label { color:var(--ink-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+.stat .value { font-size:21px; font-weight:700; margin-top:3px; }
+.stat .value.good { color:var(--good); } .stat .value.warn { color:var(--warn); }
+.pill { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:600; }
+.pill.good { background:color-mix(in srgb, var(--good) 18%, transparent); color:var(--good); }
+.pill.warn { background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn); }
+.pill.neutral { background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--border); }
+.day-chart { display:flex; align-items:flex-end; gap:8px; height:110px; padding-top:6px; }
+.day-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; }
+.bar-track { width:100%; height:86px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:5px; overflow:hidden; }
+.bar-fill { width:100%; background:var(--accent); border-radius:5px 5px 0 0; }
+.bar-fill.over { background:var(--warn); }
+.day-label { font-size:10.5px; color:var(--ink-dim); } .day-val { font-size:10.5px; font-weight:600; }
+.applist { display:flex; flex-direction:column; gap:2px; }
+.app-row { display:grid; grid-template-columns:28px 1fr auto auto; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); }
+.app-row:last-child { border-bottom:none; }
+.app-icon { width:28px; height:28px; border-radius:7px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; background:var(--accent); }
+.app-time { color:var(--ink-dim); font-size:12px; white-space:nowrap; }
+.switch { position:relative; width:34px; height:19px; flex-shrink:0; border-radius:999px; background:var(--surface-2); border:1px solid var(--border); cursor:pointer; appearance:none; -webkit-appearance:none; outline-offset:2px; }
+.switch::after { content:""; position:absolute; top:1px; left:1px; width:15px; height:15px; border-radius:50%; background:var(--ink-dim); transition:left .15s, background .15s; }
+.switch:checked { background:var(--accent); border-color:var(--accent); }
+.switch:checked::after { left:15px; background:var(--accent-ink); }
+.sitelist { display:flex; flex-direction:column; gap:2px; }
+.site-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); font-size:13px; }
+.site-row:last-child { border-bottom:none; }
+.site-visits { color:var(--ink-dim); font-size:12px; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 14px; border-radius:9px; font-size:13px; font-weight:600; border:1px solid var(--border); background:var(--surface); color:var(--ink); cursor:pointer; }
+.btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+.btn.danger { color:var(--crit); border-color:color-mix(in srgb, var(--crit) 40%, var(--border)); }
+.settings-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 2px; border-bottom:1px solid var(--border); }
+.settings-row:last-child { border-bottom:none; }
+.settings-row .label { font-size:13px; font-weight:500; }
+.settings-row .desc { font-size:12px; color:var(--ink-dim); margin-top:2px; }
+.audit-row { display:flex; gap:10px; padding:8px 2px; border-bottom:1px solid var(--border); font-size:12.5px; }
+.audit-row:last-child { border-bottom:none; }
+.audit-time { color:var(--ink-dim); white-space:nowrap; flex-shrink:0; }
+.consent-list { display:flex; flex-direction:column; gap:8px; }
+.consent-item { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; }
+.consent-item .ok { color:var(--good); flex-shrink:0; margin-top:1px; }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(10,14,13,.5); display:none; align-items:center; justify-content:center; z-index:50; padding:max(16px, env(safe-area-inset-left,0px)); }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:14px; width:100%; max-width:420px; padding:20px; max-height:88vh; overflow-y:auto; }
+.modal h3 { font-size:16px; margin-bottom:4px; }
+.modal .sub { color:var(--ink-dim); font-size:12.5px; margin-bottom:16px; }
+.step-dots { display:flex; gap:6px; margin-bottom:16px; }
+.step-dots span { width:22px; height:4px; border-radius:2px; background:var(--surface-2); }
+.step-dots span.on { background:var(--accent); }
+input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; margin-top:12px; }
+.link-box { display:flex; gap:8px; margin-top:10px; }
+.link-box input { flex:1; font-size:12px; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.toast { position:fixed; bottom:max(16px, env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:9px; font-size:12.5px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:60; white-space:nowrap; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
+.empty-state { text-align:center; padding:30px 10px; color:var(--ink-dim); }
+.loading-screen { display:flex; align-items:center; justify-content:center; min-height:60vh; color:var(--ink-dim); }
+</style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen">Loading…</div>
+
+<div class="app" id="app" style="display:none;">
+  <div class="topbar">
+    <div class="brand"><span class="mark">G</span> Guardian Console</div>
+    <div class="acct"><span id="acctEmail"></span><button id="logoutBtn">Sign out</button></div>
+  </div>
+
+  <div class="rail">
+    <div class="rail-section">
+      <div class="rail-title">Children</div>
+      <div id="childList"></div>
+      <button class="add-device-btn" id="openAddChild">+ Add child</button>
+    </div>
+    <div class="rail-section" id="navSection" style="display:none;">
+      <div class="rail-title">View</div>
+      <button class="nav-item active" data-view="overview">&#9679; Overview</button>
+      <button class="nav-item" data-view="apps">&#9634; Apps &amp; web</button>
+      <button class="nav-item" data-view="settings">&#9881; Settings</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="view active" data-view="overview">
+      <div class="panel" id="noDeviceNotice" style="display:none;">
+        <div class="empty-state">
+          <div style="font-size:26px;">&#9679;</div>
+          <p id="noDeviceText">No device enrolled yet.</p>
+          <button class="btn primary" id="noDeviceAddBtn">Add device</button>
+        </div>
+      </div>
+      <div id="overviewPanels">
+        <div class="panel">
+          <div class="panel-head"><h2 id="ovChildName">Overview</h2><span class="hint" id="ovSynced">—</span></div>
+          <div class="stat-row">
+            <div class="stat"><div class="label">Screen time today</div><div class="value" id="statScreen">—</div></div>
+            <div class="stat"><div class="label">Weekday limit</div><div class="value" id="statLimit">—</div></div>
+            <div class="stat"><div class="label">Battery</div><div class="value" id="statBattery">—</div></div>
+            <div class="stat"><div class="label">Device status</div><div class="value" id="statOnline">—</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>This week</h2><span class="hint">sample data &mdash; vs. weekday limit</span></div>
+          <div class="day-chart" id="weekChart"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" data-view="apps">
+      <div class="panel">
+        <div class="panel-head"><h2>App usage &amp; blocking</h2><span class="hint">sample data</span></div>
+        <div class="applist" id="appList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Web activity</h2><span class="hint">managed browser &middot; category view</span></div>
+        <div class="sitelist" id="siteList"></div>
+        <p class="hint" style="margin-top:10px;">Shown by site and visit count, not full URL history, to limit what's exposed.</p>
+      </div>
+    </div>
+
+    <div class="view" data-view="settings">
+      <div class="panel">
+        <div class="panel-head"><h2>Screen time &amp; downtime</h2></div>
+        <div class="settings-row">
+          <div><div class="label">Weekday limit</div><div class="desc">Mon&ndash;Fri</div></div>
+          <input type="text" id="weekdayLimitInput" class="mono" style="width:70px; margin:0; text-align:right;" value="240">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Weekend limit</div><div class="desc">Sat&ndash;Sun, minutes</div></div>
+          <input type="text" id="weekendLimitInput" class="mono" style="width:70px; margin:0; text-align:right;" value="360">
+        </div>
+        <div style="margin-top:12px; text-align:right;"><button class="btn primary" id="savePolicyBtn">Save</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Device</h2></div>
+        <div id="deviceSettingsBody"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Consent record</h2></div>
+        <div class="consent-list" id="consentList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Activity log</h2><span class="hint">this account</span></div>
+        <div id="auditList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add child modal -->
+<div class="modal-overlay" id="addChildModal">
+  <div class="modal">
+    <h3>Add a child</h3>
+    <p class="sub">Create a profile, then generate an enrollment link for their device.</p>
+    <input type="text" id="childNameInput" placeholder="Child's name">
+    <div class="modal-actions">
+      <button class="btn" data-close="addChildModal">Cancel</button>
+      <button class="btn primary" id="createChildBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add device (enrollment link) modal -->
+<div class="modal-overlay" id="addDeviceModal">
+  <div class="modal">
+    <h3>Enroll a device</h3>
+    <p class="sub" id="addDeviceSub">Open this link on the device you want to manage.</p>
+    <div class="link-box">
+      <input type="text" id="enrollLinkBox" readonly>
+      <button class="btn" id="copyLinkBtn">Copy</button>
+    </div>
+    <p class="hint" style="margin-top:10px;">The link expires in 15 minutes and works once.</p>
+    <div class="modal-actions">
+      <button class="btn" data-close="addDeviceModal">Close</button>
+      <button class="btn primary" id="refreshStatusBtn">Check status</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(sel, root){ return (root||document).querySelector(sel); };
+  var $all = function(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); };
+
+  var token = localStorage.getItem('gc_token');
+  if (!token) { window.location.href = 'login.html'; return; }
+
+  var state = { children: [], activeChildId: null, activeView: 'overview' };
+
+  function api(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Authorization': 'Bearer ' + token }, opts.headers || {});
+    if (opts.body && typeof opts.body !== 'string') {
+      opts.body = JSON.stringify(opts.body);
+      opts.headers['Content-Type'] = 'application/json';
+    }
+    return fetch(path, opts).then(function(r){
+      if (r.status === 401) { localStorage.removeItem('gc_token'); window.location.href = 'login.html'; return Promise.reject(new Error('unauthenticated')); }
+      return r.json().then(function(body){ return { ok: r.ok, status: r.status, body: body }; });
+    });
+  }
+
+  function toast(msg){
+    var t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._h); toast._h = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+  function fmt(mins){ mins = mins||0; var h=Math.floor(mins/60), m=mins%60; return (h>0?h+'h ':'')+m+'m'; }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function activeChild(){ return state.children.filter(function(c){ return c.id===state.activeChildId; })[0]; }
+  function activeDevice(){ var c=activeChild(); return c && c.devices.filter(function(d){ return d.status!=='revoked'; })[0]; }
+
+  function loadAll(){
+    return api('/api/me').then(function(res){
+      if (!res.ok) return;
+      $('#acctEmail').textContent = res.body.parent.email;
+      return api('/api/children');
+    }).then(function(res){
+      state.children = res.body.children;
+      if (!state.activeChildId && state.children.length) state.activeChildId = state.children[0].id;
+      renderChildList();
+      return renderActiveChild();
+    }).then(function(){
+      $('#loadingScreen').style.display = 'none';
+      $('#app').style.display = '';
+    });
+  }
+
+  function renderChildList(){
+    var wrap = $('#childList'); wrap.innerHTML = '';
+    if (!state.children.length){
+      wrap.innerHTML = '<p class="hint" style="padding:4px 2px;">No children yet.</p>';
+      $('#navSection').style.display = 'none';
+      return;
+    }
+    $('#navSection').style.display = '';
+    state.children.forEach(function(c){
+      var device = c.devices.filter(function(d){ return d.status!=='revoked'; })[0];
+      var status = device ? device.status : 'none';
+      var sub = device ? (device.status==='pending' ? 'Pending enrollment' : device.platform + ' device') : 'No device yet';
+      var btn = document.createElement('button');
+      btn.className = 'child-card' + (c.id===state.activeChildId ? ' active' : '');
+      btn.innerHTML =
+        '<span class="child-avatar">'+c.name.charAt(0).toUpperCase()+'</span>'+
+        '<span class="child-meta"><span class="child-name">'+escapeHtml(c.name)+'</span>'+
+        '<span class="child-sub"><span class="dot '+status+'"></span>'+escapeHtml(sub)+'</span></span>';
+      btn.addEventListener('click', function(){ state.activeChildId = c.id; renderChildList(); renderActiveChild(); });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderActiveChild(){
+    var c = activeChild();
+    var device = c ? c.devices.filter(function(d){ return d.status!=='revoked'; })[0] : null;
+
+    if (!c){
+      $('#noDeviceNotice').style.display = '';
+      $('#noDeviceText').textContent = 'Add a child profile to get started.';
+      $('#overviewPanels').style.display = 'none';
+      $('#appList').innerHTML = ''; $('#siteList').innerHTML = ''; $('#deviceSettingsBody').innerHTML = '';
+      $('#consentList').innerHTML = ''; $('#auditList').innerHTML = '';
+      return Promise.resolve();
+    }
+    $('#ovChildName').textContent = c.name + "'s overview";
+
+    if (!device){
+      $('#noDeviceNotice').style.display = '';
+      $('#noDeviceText').textContent = 'No device enrolled for ' + c.name + ' yet.';
+      $('#overviewPanels').style.display = 'none';
+      renderDeviceSettings(c, null);
+      return loadAudit();
+    }
+
+    if (device.status === 'pending'){
+      $('#noDeviceNotice').style.display = '';
+      $('#noDeviceText').textContent = device.platform + ' device pending — open the enrollment link on the device.';
+      $('#overviewPanels').style.display = 'none';
+      renderDeviceSettings(c, device);
+      return loadAudit();
+    }
+
+    $('#noDeviceNotice').style.display = 'none';
+    $('#overviewPanels').style.display = '';
+    renderDeviceSettings(c, device);
+
+    return Promise.all([
+      api('/api/devices/'+device.id+'/report').then(function(res){ if (res.ok) renderReport(res.body, device); }),
+      api('/api/devices/'+device.id+'/policy').then(function(res){ if (res.ok) renderPolicyForm(res.body.policy); }),
+      api('/api/devices/'+device.id+'/consent').then(function(res){ if (res.ok) renderConsent(res.body.consent); }),
+      loadAudit()
+    ]);
+  }
+
+  function loadAudit(){
+    return api('/api/audit').then(function(res){
+      var al = $('#auditList'); al.innerHTML = '';
+      if (!res.ok || !res.body.entries.length){ al.innerHTML = '<div class="empty-state">No activity yet.</div>'; return; }
+      res.body.entries.slice(0,20).forEach(function(a){
+        var row = document.createElement('div'); row.className = 'audit-row';
+        row.innerHTML = '<span class="audit-time mono">'+new Date(a.at).toLocaleString()+'</span><span>'+escapeHtml(a.action.replace(/_/g,' '))+(a.detail?' — '+escapeHtml(a.detail):'')+'</span>';
+        al.appendChild(row);
+      });
+    });
+  }
+
+  function renderReport(r, device){
+    $('#ovSynced').textContent = device.lastSeenAt ? 'Last synced ' + new Date(device.lastSeenAt).toLocaleTimeString() : 'Not synced yet';
+    $('#statScreen').textContent = fmt(r.screenMinutesToday);
+    $('#statScreen').className = 'value';
+    $('#statLimit').textContent = fmt(240);
+    $('#statBattery').textContent = (r.battery||0) + '%';
+    $('#statOnline').textContent = r.online ? 'Online' : 'Offline';
+    $('#statOnline').className = 'value ' + (r.online ? 'good' : '');
+
+    var el = $('#weekChart'); el.innerHTML = '';
+    var days = ['S','M','T','W','T','F','S'];
+    var max = Math.max(240, Math.max.apply(null, r.weekMinutes)) || 1;
+    r.weekMinutes.forEach(function(mins, i){
+      var col = document.createElement('div'); col.className = 'day-col';
+      var pct = Math.round((mins/max)*100);
+      col.innerHTML =
+        '<div class="day-val">'+fmt(mins)+'</div>'+
+        '<div class="bar-track"><div class="bar-fill'+(mins>240?' over':'')+'" style="height:'+pct+'%"></div></div>'+
+        '<div class="day-label">'+days[i]+'</div>';
+      el.appendChild(col);
+    });
+
+    var al = $('#appList'); al.innerHTML = '';
+    r.apps.forEach(function(a){
+      var row = document.createElement('div'); row.className = 'app-row';
+      row.innerHTML =
+        '<span class="app-icon">'+a.name.charAt(0)+'</span>'+
+        '<span>'+escapeHtml(a.name)+'</span>'+
+        '<span class="app-time mono">'+(a.blocked?'Blocked':fmt(a.minutes))+'</span>'+
+        '<input type="checkbox" class="switch" '+(a.blocked?'':'checked')+' disabled title="Blocking is sample data in this demo">';
+      al.appendChild(row);
+    });
+
+    var sl = $('#siteList'); sl.innerHTML = '';
+    r.sites.forEach(function(s){
+      var row = document.createElement('div'); row.className = 'site-row';
+      row.innerHTML = '<span>'+escapeHtml(s.site)+'</span><span class="site-visits">'+s.visits+' visits</span>';
+      sl.appendChild(row);
+    });
+  }
+
+  function renderPolicyForm(policy){
+    $('#weekdayLimitInput').value = policy.weekdayLimitMin;
+    $('#weekendLimitInput').value = policy.weekendLimitMin;
+  }
+
+  function renderConsent(records){
+    var wrap = $('#consentList'); wrap.innerHTML = '';
+    if (!records.length){ wrap.innerHTML = '<p class="hint">No consent recorded yet.</p>'; return; }
+    records.forEach(function(r){
+      var active = !r.revokedAt;
+      wrap.innerHTML += '<div class="consent-item"><span class="ok">'+(active?'&#10003;':'&#10007;')+'</span>'+
+        escapeHtml(r.scope.replace(/_/g,' '))+' &mdash; '+(active ? 'granted '+new Date(r.grantedAt).toLocaleDateString() : 'revoked '+new Date(r.revokedAt).toLocaleDateString())+'</div>';
+    });
+  }
+
+  function renderDeviceSettings(c, device){
+    var wrap = $('#deviceSettingsBody');
+    if (!device){
+      wrap.innerHTML = '<div class="empty-state">No device enrolled for '+escapeHtml(c.name)+'.</div>';
+      return;
+    }
+    var statusPill = device.status==='active' ? '<span class="pill good">Active</span>'
+      : device.status==='pending' ? '<span class="pill warn">Pending</span>'
+      : '<span class="pill neutral">Revoked</span>';
+    wrap.innerHTML =
+      '<div class="settings-row"><div><div class="label">Platform</div><div class="desc">'+escapeHtml(device.managementMode)+'</div></div>'+statusPill+'</div>'+
+      '<div class="settings-row"><div><div class="label">Granted permissions</div><div class="desc">'+escapeHtml((device.grantedScopes||[]).join(', ')||'none')+'</div></div></div>'+
+      (device.status!=='revoked'
+        ? '<div class="settings-row"><div><div class="label">Remove device</div><div class="desc">Revokes access immediately; visible on the device</div></div><button class="btn danger" id="revokeBtn">Revoke</button></div>'
+        : '');
+    var revokeBtn = $('#revokeBtn');
+    if (revokeBtn){
+      revokeBtn.addEventListener('click', function(){
+        api('/api/devices/'+device.id+'/revoke', { method:'POST' }).then(function(res){
+          if (!res.ok) return toast(res.body.error || 'Could not revoke.');
+          toast('Device access revoked');
+          loadAll();
+        });
+      });
+    }
+  }
+
+  // ---- nav ----
+  $all('.nav-item').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      $all('.nav-item').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      var v = btn.getAttribute('data-view');
+      $all('.view').forEach(function(el){ el.classList.toggle('active', el.getAttribute('data-view')===v); });
+    });
+  });
+
+  // ---- modals ----
+  function openModal(id){ $('#'+id).classList.add('open'); }
+  function closeModal(id){ $('#'+id).classList.remove('open'); }
+  $all('[data-close]').forEach(function(b){ b.addEventListener('click', function(){ closeModal(b.getAttribute('data-close')); }); });
+  $all('.modal-overlay').forEach(function(ov){ ov.addEventListener('click', function(e){ if (e.target===ov) ov.classList.remove('open'); }); });
+
+  $('#openAddChild').addEventListener('click', function(){ $('#childNameInput').value=''; openModal('addChildModal'); });
+  $('#createChildBtn').addEventListener('click', function(){
+    var name = $('#childNameInput').value.trim();
+    if (!name) return;
+    api('/api/children', { method:'POST', body:{ name:name } }).then(function(res){
+      if (!res.ok) return toast(res.body.error || 'Could not create profile.');
+      closeModal('addChildModal');
+      state.activeChildId = res.body.child.id;
+      toast('Added ' + name);
+      loadAll();
+    });
+  });
+
+  $('#noDeviceAddBtn').addEventListener('click', function(){ generateEnrollLink(); });
+
+  function generateEnrollLink(){
+    var c = activeChild();
+    if (!c) return toast('Add a child first.');
+    api('/api/children/'+c.id+'/enroll-token', { method:'POST' }).then(function(res){
+      if (!res.ok) return toast(res.body.error || 'Could not create link.');
+      var url = window.location.origin + res.body.enrollUrl;
+      $('#enrollLinkBox').value = url;
+      $('#addDeviceSub').textContent = 'Open this on ' + c.name + "'s device, not this one.";
+      openModal('addDeviceModal');
+    });
+  }
+
+  $('#copyLinkBtn').addEventListener('click', function(){
+    var box = $('#enrollLinkBox');
+    navigator.clipboard.writeText(box.value).then(function(){ toast('Link copied'); }).catch(function(){ box.select(); toast('Select and copy the link'); });
+  });
+  $('#refreshStatusBtn').addEventListener('click', function(){
+    loadAll().then(function(){
+      var d = activeDevice();
+      if (d && d.status === 'active') { closeModal('addDeviceModal'); toast('Device enrolled!'); }
+      else toast('Still pending — open the link on the child device.');
+    });
+  });
+
+  $('#savePolicyBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return toast('No active device.');
+    var weekday = parseInt($('#weekdayLimitInput').value, 10) || 0;
+    var weekend = parseInt($('#weekendLimitInput').value, 10) || 0;
+    api('/api/devices/'+d.id+'/policy', { method:'PUT', body:{ weekdayLimitMin: weekday, weekendLimitMin: weekend } }).then(function(res){
+      if (!res.ok) return toast(res.body.error || 'Could not save.');
+      toast('Policy saved');
+    });
+  });
+
+  $('#logoutBtn').addEventListener('click', function(){
+    api('/api/auth/logout', { method:'POST' }).then(function(){ localStorage.removeItem('gc_token'); window.location.href='login.html'; });
+  });
+
+  loadAll();
+})();
+</script>
+</body>
+</html>
