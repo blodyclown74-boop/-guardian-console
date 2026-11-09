@@ -3,7 +3,7 @@ const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:
 const id=(p)=>p+'_'+crypto.randomUUID().replace(/-/g,'');
 const now=()=>new Date().toISOString();
 async function body(req){try{return await req.json()}catch{return null}}
-async function hashPassword(password,salt){const enc=new TextEncoder();const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:210000,hash:'SHA-256'},key,256);return [...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function hashPassword(password,salt){const enc=new TextEncoder();const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:100000,hash:'SHA-256'},key,256);return [...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const random=(n=24)=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
 async function auth(req,env){const h=req.headers.get('authorization')||'';if(!h.startsWith('Bearer '))return null;return await env.DB.prepare('SELECT p.id,p.email,p.mfaEnabled,p.createdAt FROM sessions s JOIN parents p ON p.id=s.parentId WHERE s.token=? AND s.expiresAt>?').bind(h.slice(7),now()).first()}
 async function audit(env,parentId,action,detail=''){await env.DB.prepare('INSERT INTO auditLog(id,parentId,action,detail,at) VALUES(?,?,?,?,?)').bind(id('audit'),parentId,action,detail,now()).run()}
