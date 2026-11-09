@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "guardian-console-db",
-      "database_id": "REPLACE_WITH_DATABASE_ID",
+      "database_id": "0783293d-ef2d-4e6e-9fd4-601978735a23",
       "migrations_dir": "migrations"
     }
   ]
