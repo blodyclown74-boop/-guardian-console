@@ -3,7 +3,7 @@
   "main": "worker.js",
   "compatibility_date": "2026-11-09",
   "assets": {
-    "directory": "./frontend",
+    "directory": "./Frontend",
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*"
