@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardian Console — Sign in</title>
+<style>
+  :root { --bg:#f4f6f5; --surface:#fff; --border:#d7dde0; --ink:#17221f; --ink-dim:#5b6b66; --accent:#2f6f5e; --accent-ink:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111615; --surface:#182020; --border:#2b3634; --ink:#e8ece9; --ink-dim:#93a39c; --accent:#5cb89a; --accent-ink:#0b1513; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,'Segoe UI',sans-serif; padding:20px; }
+  .card { width:100%; max-width:380px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; }
+  .mark { width:36px; height:36px; border-radius:9px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center;
+    justify-content:center; font-weight:700; margin-bottom:14px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { color:var(--ink-dim); font-size:13px; margin:0 0 20px; }
+  label { display:block; font-size:12.5px; font-weight:600; margin-bottom:6px; margin-top:14px; }
+  input { width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:14px; }
+  button { width:100%; margin-top:20px; padding:11px; border-radius:9px; border:1px solid var(--accent); background:var(--accent);
+    color:var(--accent-ink); font-weight:600; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .toggle { text-align:center; margin-top:16px; font-size:12.5px; color:var(--ink-dim); }
+  .toggle a { color:var(--accent); cursor:pointer; text-decoration:none; }
+  .error { color:#b5433a; font-size:12.5px; margin-top:12px; min-height:1px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">G</div>
+    <h1 id="formTitle">Sign in to Guardian Console</h1>
+    <p class="sub" id="formSub">Manage your family's devices from one account.</p>
+    <form id="authForm">
+      <label>Email</label>
+      <input type="email" id="email" required autocomplete="email">
+      <label>Password</label>
+      <input type="password" id="password" required autocomplete="current-password" minlength="8">
+      <button type="submit" id="submitBtn">Sign in</button>
+      <div class="error" id="errorMsg"></div>
+    </form>
+    <div class="toggle" id="toggleMode">New here? <a id="toggleLink">Create an account</a></div>
+  </div>
+
+<script>
+  var mode = 'login';
+  var form = document.getElementById('authForm');
+  var errorMsg = document.getElementById('errorMsg');
+  var submitBtn = document.getElementById('submitBtn');
+  var toggleWrap = document.getElementById('toggleMode');
+
+  function applyMode(){
+    document.getElementById('formTitle').textContent = mode === 'login' ? 'Sign in to Guardian Console' : 'Create your account';
+    document.getElementById('formSub').textContent = mode === 'login'
+      ? "Manage your family's devices from one account."
+      : 'Takes a minute. No child devices needed yet.';
+    submitBtn.textContent = mode === 'login' ? 'Sign in' : 'Create account';
+    toggleWrap.innerHTML = mode === 'login'
+      ? 'New here? <a id="toggleLink">Create an account</a>'
+      : 'Already have an account? <a id="toggleLink">Sign in</a>';
+  }
+
+  // Delegated listener survives the innerHTML swap inside applyMode().
+  toggleWrap.addEventListener('click', function(e){
+    if (e.target && e.target.id === 'toggleLink') {
+      mode = mode === 'login' ? 'signup' : 'login';
+      errorMsg.textContent = '';
+      applyMode();
+    }
+  });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    errorMsg.textContent = '';
+    submitBtn.disabled = true;
+    var email = document.getElementById('email').value.trim();
+    var password = document.getElementById('password').value;
+    var endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function(r){ return r.json().then(function(body){ return { ok: r.ok, body: body }; }); })
+      .then(function(res){
+        submitBtn.disabled = false;
+        if (!res.ok) { errorMsg.textContent = res.body.error || 'Something went wrong.'; return; }
+        localStorage.setItem('gc_token', res.body.token);
+        window.location.href = 'index.html';
+      })
+      .catch(function(){
+        submitBtn.disabled = false;
+        errorMsg.textContent = 'Could not reach the server.';
+      });
+  });
+
+  if (localStorage.getItem('gc_token')) window.location.href = 'index.html';
+</script>
+</body>
+</html>
