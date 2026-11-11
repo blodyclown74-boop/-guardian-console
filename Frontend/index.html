@@ -99,6 +99,56 @@ button { font: inherit; }
 .consent-item { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; }
 .consent-item .ok { color:var(--good); flex-shrink:0; margin-top:1px; }
 
+.live-frame {
+  position: relative; width: 100%; max-width: 280px; margin: 0 auto;
+  aspect-ratio: 9/16; border-radius: 18px; overflow: hidden;
+  border: 2px solid var(--border); background: #0c1210;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.live-frame.offline { background: repeating-linear-gradient(-45deg, #1a2220, #1a2220 8px, #141a18 8px, #141a18 16px); }
+.live-canvas {
+  width: 100%; height: 100%; display: block;
+}
+.live-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: #c8d4cf; font-size: 13px; text-align: center; padding: 16px;
+  pointer-events: none;
+}
+.live-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  background: #b5433a; color: #fff; padding: 3px 8px; border-radius: 999px;
+}
+.live-timer {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  font-size: 11px; font-family: ui-monospace, monospace;
+  background: rgba(0,0,0,.55); color: #fff; padding: 3px 8px; border-radius: 6px;
+}
+.control-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.control-grid .btn { width: 100%; justify-content: center; }
+.strict-banner {
+  font-size: 12.5px; line-height: 1.45; padding: 12px 14px; border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+  color: var(--ink); margin-bottom: 14px;
+}
+.strict-banner strong { color: var(--warn); }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.status-pill.on { background: color-mix(in srgb, var(--good) 18%, transparent); border-color: color-mix(in srgb, var(--good) 40%, var(--border)); color: var(--good); }
+.status-pill.off { color: var(--ink-dim); }
+.session-meta { font-size: 12px; color: var(--ink-dim); margin-top: 8px; }
+.cmd-log { font-size: 12px; max-height: 120px; overflow-y: auto; margin-top: 10px; }
+.cmd-log .row { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.cmd-log .row:last-child { border-bottom: none; }
+
+
 .modal-overlay { position:fixed; inset:0; background:rgba(10,14,13,.5); display:none; align-items:center; justify-content:center; z-index:50; padding:max(16px, env(safe-area-inset-left,0px)); }
 .modal-overlay.open { display:flex; }
 .modal { background:var(--surface); border:1px solid var(--border); border-radius:14px; width:100%; max-width:420px; padding:20px; max-height:88vh; overflow-y:auto; }
@@ -137,6 +187,7 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
       <div class="rail-title">View</div>
       <button class="nav-item active" data-view="overview">&#9679; Overview</button>
       <button class="nav-item" data-view="apps">&#9634; Apps &amp; web</button>
+      <button class="nav-item" data-view="live">&#9654; Live &amp; control</button>
       <button class="nav-item" data-view="settings">&#9881; Settings</button>
     </div>
   </div>
@@ -179,6 +230,59 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
       </div>
     </div>
 
+    <div class="view" data-view="live">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Live screen</h2>
+          <span class="status-pill off" id="streamStatusPill">Idle</span>
+        </div>
+        <div class="strict-banner" id="streamStrictBanner">
+          <strong>DEMO media · strict control.</strong> Session start/stop, policy gates, and audit are real.
+          The picture below is a <em>mock</em> device frame. Real pixels require the native agent described in <code>AGENT.md</code>
+          (consent + policy + short session still apply).
+        </div>
+        <div class="live-frame offline" id="liveFrame">
+          <span class="live-badge" id="liveBadge" style="display:none;">LIVE</span>
+          <span class="live-timer" id="liveTimer" style="display:none;">5:00</span>
+          <canvas class="live-canvas" id="liveCanvas" width="270" height="480"></canvas>
+          <div class="live-overlay" id="liveOverlay">
+            <div style="font-size:28px;opacity:.5;">&#9633;</div>
+            <div>No active stream</div>
+            <div style="font-size:11.5px;opacity:.75;">Start a session to begin (demo)</div>
+          </div>
+        </div>
+        <div class="session-meta" id="streamMeta">Scope &amp; policy checks appear after a device is selected.</div>
+        <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+          <button class="btn primary" id="startStreamBtn">Start live view</button>
+          <button class="btn danger" id="stopStreamBtn" disabled>End stream</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Remote control</h2>
+          <span class="status-pill off" id="controlStatusPill">Idle</span>
+        </div>
+        <div class="strict-banner">
+          <strong>Strict control.</strong> Commands only work inside a short, confirmed control session.
+          Lock, alert, mute, and similar actions are audited. The child device shows a managed notice while active.
+        </div>
+        <div class="session-meta" id="controlMeta">No control session.</div>
+        <div style="display:flex; gap:8px; margin-top:12px; margin-bottom:14px; flex-wrap:wrap;">
+          <button class="btn primary" id="startControlBtn">Start control session</button>
+          <button class="btn danger" id="stopControlBtn" disabled>End session</button>
+        </div>
+        <div class="control-grid" id="controlGrid">
+          <button class="btn" data-cmd="lock" disabled>Lock device</button>
+          <button class="btn" data-cmd="unlock" disabled>Unlock</button>
+          <button class="btn" data-cmd="alert" disabled>Send alert</button>
+          <button class="btn" data-cmd="mute" disabled>Mute media</button>
+          <button class="btn" data-cmd="screenshot" disabled>Screenshot</button>
+          <button class="btn" data-cmd="open_settings" disabled>Open settings</button>
+        </div>
+        <div class="cmd-log" id="cmdLog"></div>
+      </div>
+    </div>
+
     <div class="view" data-view="settings">
       <div class="panel">
         <div class="panel-head"><h2>Screen time &amp; downtime</h2></div>
@@ -190,7 +294,35 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
           <div><div class="label">Weekend limit</div><div class="desc">Sat&ndash;Sun, minutes</div></div>
           <input type="text" id="weekendLimitInput" class="mono" style="width:70px; margin:0; text-align:right;" value="360">
         </div>
-        <div style="margin-top:12px; text-align:right;"><button class="btn primary" id="savePolicyBtn">Save</button></div>
+        <div style="margin-top:12px; text-align:right;"><button class="btn primary" id="savePolicyBtn">Save limits</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Elevated access (strict)</h2><span class="hint">off by default</span></div>
+        <div class="strict-banner" style="margin-bottom:10px;">
+          These features stay <strong>disabled</strong> until you turn them on here, even if the child granted consent at enrollment.
+          Sessions are capped and fully audited.
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Allow live screen view</div><div class="desc">Requires screen_stream consent</div></div>
+          <input type="checkbox" class="switch" id="allowStreamToggle">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Allow remote control</div><div class="desc">Requires remote_control consent</div></div>
+          <input type="checkbox" class="switch" id="allowControlToggle">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Max stream length</div><div class="desc">1–15 minutes</div></div>
+          <input type="text" id="maxStreamInput" class="mono" style="width:70px; margin:0; text-align:right;" value="5">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Max control session</div><div class="desc">1–15 minutes</div></div>
+          <input type="text" id="maxControlInput" class="mono" style="width:70px; margin:0; text-align:right;" value="5">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Notify child on control</div><div class="desc">Show on-device banner</div></div>
+          <input type="checkbox" class="switch" id="notifyChildToggle" checked>
+        </div>
+        <div style="margin-top:12px; text-align:right;"><button class="btn primary" id="saveElevatedBtn">Save elevated policy</button></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>Device</h2></div>
@@ -234,6 +366,19 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
     <div class="modal-actions">
       <button class="btn" data-close="addDeviceModal">Close</button>
       <button class="btn primary" id="refreshStatusBtn">Check status</button>
+    </div>
+  </div>
+</div>
+
+<!-- Strict confirm modal for elevated actions -->
+<div class="modal-overlay" id="confirmElevatedModal">
+  <div class="modal">
+    <h3 id="confirmElevatedTitle">Confirm elevated action</h3>
+    <p class="sub" id="confirmElevatedBody">This action is time-limited and will be recorded in the activity log.</p>
+    <div class="strict-banner" id="confirmElevatedNotice"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close="confirmElevatedModal">Cancel</button>
+      <button class="btn primary" id="confirmElevatedBtn">I understand — continue</button>
     </div>
   </div>
 </div>
@@ -350,6 +495,7 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
     return Promise.all([
       api('/api/devices/'+device.id+'/report').then(function(res){ if (res.ok) renderReport(res.body, device); }),
       api('/api/devices/'+device.id+'/policy').then(function(res){ if (res.ok) renderPolicyForm(res.body.policy); }),
+      api('/api/devices/'+device.id+'/stream').then(function(){ if (state.activeView==='live') refreshLiveState(); }),
       api('/api/devices/'+device.id+'/consent').then(function(res){ if (res.ok) renderConsent(res.body.consent); }),
       loadAudit()
     ]);
@@ -411,6 +557,11 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
   function renderPolicyForm(policy){
     $('#weekdayLimitInput').value = policy.weekdayLimitMin;
     $('#weekendLimitInput').value = policy.weekendLimitMin;
+    var as = $('#allowStreamToggle'); if (as) as.checked = !!policy.allowScreenStream;
+    var ac = $('#allowControlToggle'); if (ac) ac.checked = !!policy.allowRemoteControl;
+    var ms = $('#maxStreamInput'); if (ms) ms.value = policy.maxStreamMinutes || 5;
+    var mc = $('#maxControlInput'); if (mc) mc.value = policy.maxControlMinutes || 5;
+    var nc = $('#notifyChildToggle'); if (nc) nc.checked = policy.notifyChildOnControl !== false;
   }
 
   function renderConsent(records){
@@ -456,7 +607,9 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
       $all('.nav-item').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       var v = btn.getAttribute('data-view');
+      state.activeView = v;
       $all('.view').forEach(function(el){ el.classList.toggle('active', el.getAttribute('data-view')===v); });
+      if (v === 'live') refreshLiveState();
     });
   });
 
@@ -502,6 +655,277 @@ input[type="text"] { width:100%; padding:9px 11px; border-radius:8px; border:1px
       var d = activeDevice();
       if (d && d.status === 'active') { closeModal('addDeviceModal'); toast('Device enrolled!'); }
       else toast('Still pending — open the link on the child device.');
+    });
+  });
+
+
+  // ---- Live stream & remote control (strict) ----
+  var streamTimer = null;
+  var controlTimer = null;
+  var pendingElevated = null; // { kind: 'stream'|'control', resolve }
+
+  function setPill(el, on, label){
+    if (!el) return;
+    el.className = 'status-pill ' + (on ? 'on' : 'off');
+    el.textContent = label;
+  }
+
+  function fmtRemain(expiresAt){
+    var ms = Date.parse(expiresAt) - Date.now();
+    if (ms <= 0) return '0:00';
+    var s = Math.ceil(ms/1000);
+    var m = Math.floor(s/60); s = s % 60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+
+  function drawDemoFrame(active){
+    var canvas = $('#liveCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    ctx.fillStyle = '#0c1210';
+    ctx.fillRect(0,0,w,h);
+    if (!active) return;
+    // faux phone UI
+    var t = Date.now()/1000;
+    ctx.fillStyle = '#1a2422';
+    ctx.fillRect(12, 40, w-24, h-80);
+    ctx.fillStyle = '#5cb89a';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Demo device screen', 24, 70);
+    ctx.fillStyle = '#93a39c';
+    ctx.fillText(new Date().toLocaleTimeString(), 24, 92);
+    // moving bars
+    for (var i=0;i<5;i++){
+      var y = 120 + i*48 + Math.sin(t + i)*6;
+      ctx.fillStyle = 'rgba(92,184,154,'+(0.25+0.1*i)+')';
+      ctx.fillRect(24, y, (w-48)*(0.4 + 0.2*Math.sin(t*0.7+i)), 28);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(0, 0, w, 28);
+    ctx.fillStyle = '#c8d4cf';
+    ctx.font = '10px monospace';
+    ctx.fillText('MANAGED · LIVE VIEW', 16, 18);
+  }
+
+  function startDemoAnimation(){
+    stopDemoAnimation();
+    function tick(){
+      drawDemoFrame(true);
+      streamTimer = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+  function stopDemoAnimation(){
+    if (streamTimer){ cancelAnimationFrame(streamTimer); streamTimer = null; }
+    drawDemoFrame(false);
+  }
+
+  function updateStreamUI(state){
+    var frame = $('#liveFrame');
+    var badge = $('#liveBadge');
+    var timer = $('#liveTimer');
+    var overlay = $('#liveOverlay');
+    var meta = $('#streamMeta');
+    var startBtn = $('#startStreamBtn');
+    var stopBtn = $('#stopStreamBtn');
+    if (!state || !state.active){
+      setPill($('#streamStatusPill'), false, 'Idle');
+      if (frame) frame.classList.add('offline');
+      if (badge) badge.style.display = 'none';
+      if (timer) timer.style.display = 'none';
+      if (overlay) overlay.style.display = 'flex';
+      if (stopBtn) stopBtn.disabled = true;
+      if (startBtn) startBtn.disabled = false;
+      stopDemoAnimation();
+      if (meta && state){
+        meta.textContent = (state.hasScope ? 'Consent granted for screen_stream. ' : 'Missing screen_stream consent. ') +
+          (state.note || '');
+      }
+      return;
+    }
+    setPill($('#streamStatusPill'), true, 'Live');
+    if (frame) frame.classList.remove('offline');
+    if (badge) badge.style.display = 'block';
+    if (timer){ timer.style.display = 'block'; timer.textContent = fmtRemain(state.session.expiresAt); }
+    if (overlay) overlay.style.display = 'none';
+    if (stopBtn) stopBtn.disabled = false;
+    if (startBtn) startBtn.disabled = true;
+    startDemoAnimation();
+    if (meta) meta.textContent = 'Session ends ' + new Date(state.session.expiresAt).toLocaleTimeString() + ' · audited';
+    // countdown refresh
+    if (controlTimer) clearInterval(controlTimer);
+    controlTimer = setInterval(function(){
+      if (!state.session) return;
+      var left = Date.parse(state.session.expiresAt) - Date.now();
+      if (timer) timer.textContent = fmtRemain(state.session.expiresAt);
+      if (left <= 0){
+        clearInterval(controlTimer); controlTimer = null;
+        refreshLiveState();
+      }
+    }, 1000);
+  }
+
+  function updateControlUI(state){
+    var meta = $('#controlMeta');
+    var startBtn = $('#startControlBtn');
+    var stopBtn = $('#stopControlBtn');
+    var cmds = $all('#controlGrid [data-cmd]');
+    var active = !!(state && state.active);
+    setPill($('#controlStatusPill'), active, active ? 'Session active' : 'Idle');
+    if (startBtn) startBtn.disabled = active;
+    if (stopBtn) stopBtn.disabled = !active;
+    cmds.forEach(function(b){ b.disabled = !active; });
+    if (meta){
+      if (!state) meta.textContent = 'No device.';
+      else if (!state.hasScope) meta.textContent = 'remote_control consent not granted on this device.';
+      else if (active) meta.textContent = 'Control session active · ends ' + new Date(state.session.expiresAt).toLocaleTimeString();
+      else meta.textContent = 'Ready. Start a short session before issuing commands.';
+    }
+  }
+
+  function refreshLiveState(){
+    var d = activeDevice();
+    if (!d){
+      updateStreamUI({ active:false, hasScope:false, note:'Select a child with an enrolled device.' });
+      updateControlUI(null);
+      return Promise.resolve();
+    }
+    return Promise.all([
+      api('/api/devices/'+d.id+'/stream'),
+      api('/api/devices/'+d.id+'/control')
+    ]).then(function(results){
+      var stream = results[0].ok ? results[0].body : { active:false, hasScope:false };
+      var control = results[1].ok ? results[1].body : { active:false, hasScope:false };
+      updateStreamUI(stream);
+      updateControlUI(control);
+    });
+  }
+
+  function openElevatedConfirm(kind, title, body, notice){
+    return new Promise(function(resolve){
+      pendingElevated = { kind: kind, resolve: resolve };
+      $('#confirmElevatedTitle').textContent = title;
+      $('#confirmElevatedBody').textContent = body;
+      $('#confirmElevatedNotice').innerHTML = notice;
+      openModal('confirmElevatedModal');
+    });
+  }
+
+  $('#confirmElevatedBtn').addEventListener('click', function(){
+    var p = pendingElevated; pendingElevated = null;
+    closeModal('confirmElevatedModal');
+    if (p && p.resolve) p.resolve(true);
+  });
+  $all('[data-close="confirmElevatedModal"]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var p = pendingElevated; pendingElevated = null;
+      if (p && p.resolve) p.resolve(false);
+    });
+  });
+
+  $('#startStreamBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return toast('No active device.');
+    openElevatedConfirm(
+      'stream',
+      'Start live screen view?',
+      'A short, audited live-view session will start. The child device should show a visible “managed / live view” notice.',
+      '<strong>Strict rules:</strong> requires screen_stream consent + policy enabled · auto-expires in a few minutes · every start/stop is logged · demo does not transmit real pixels.'
+    ).then(function(ok){
+      if (!ok) return;
+      api('/api/devices/'+d.id+'/stream', { method:'POST', body:{ action:'start', confirm:true } }).then(function(res){
+        if (!res.ok) return toast(res.body.error || 'Could not start stream.');
+        toast('Live view session started');
+        refreshLiveState();
+        loadAudit();
+      });
+    });
+  });
+
+  $('#stopStreamBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return;
+    api('/api/devices/'+d.id+'/stream', { method:'POST', body:{ action:'stop' } }).then(function(res){
+      toast(res.ok ? 'Stream ended' : (res.body.error || 'Failed'));
+      refreshLiveState();
+      loadAudit();
+    });
+  });
+
+  $('#startControlBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return toast('No active device.');
+    openElevatedConfirm(
+      'control',
+      'Start remote control session?',
+      'You will be able to lock the device, send alerts, mute media, and request a screenshot until the session expires.',
+      '<strong>Strict rules:</strong> requires remote_control consent + policy enabled · session capped · each command is audited · child is notified when enabled in policy.'
+    ).then(function(ok){
+      if (!ok) return;
+      api('/api/devices/'+d.id+'/control', { method:'POST', body:{ action:'start', confirm:true } }).then(function(res){
+        if (!res.ok) return toast(res.body.error || 'Could not start control session.');
+        toast('Control session started');
+        refreshLiveState();
+        loadAudit();
+      });
+    });
+  });
+
+  $('#stopControlBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return;
+    api('/api/devices/'+d.id+'/control', { method:'POST', body:{ action:'stop' } }).then(function(res){
+      toast(res.ok ? 'Control session ended' : (res.body.error || 'Failed'));
+      refreshLiveState();
+      loadAudit();
+    });
+  });
+
+  $all('#controlGrid [data-cmd]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var d = activeDevice();
+      if (!d) return;
+      var cmd = btn.getAttribute('data-cmd');
+      var body = { command: cmd };
+      if (cmd === 'alert'){
+        var msg = window.prompt('Alert message to show on device:', 'Please check in with a parent.');
+        if (msg === null) return;
+        body.message = msg;
+      }
+      api('/api/devices/'+d.id+'/control', { method:'POST', body: body }).then(function(res){
+        var log = $('#cmdLog');
+        var line = document.createElement('div');
+        line.className = 'row';
+        if (res.ok){
+          line.textContent = new Date().toLocaleTimeString() + ' · ' + cmd + ' — ' + (res.body.result && res.body.result.message || 'ok');
+          toast(cmd + ' sent');
+        } else {
+          line.textContent = new Date().toLocaleTimeString() + ' · ' + cmd + ' — failed: ' + (res.body.error || '');
+          toast(res.body.error || 'Command failed');
+        }
+        if (log){ log.insertBefore(line, log.firstChild); }
+        loadAudit();
+      });
+    });
+  });
+
+  $('#saveElevatedBtn').addEventListener('click', function(){
+    var d = activeDevice();
+    if (!d) return toast('No active device.');
+    var body = {
+      allowScreenStream: !!($('#allowStreamToggle') && $('#allowStreamToggle').checked),
+      allowRemoteControl: !!($('#allowControlToggle') && $('#allowControlToggle').checked),
+      maxStreamMinutes: parseInt(($('#maxStreamInput')||{}).value, 10) || 5,
+      maxControlMinutes: parseInt(($('#maxControlInput')||{}).value, 10) || 5,
+      notifyChildOnControl: !!($('#notifyChildToggle') && $('#notifyChildToggle').checked)
+    };
+    api('/api/devices/'+d.id+'/policy', { method:'PUT', body: body }).then(function(res){
+      if (!res.ok) return toast(res.body.error || 'Could not save.');
+      renderPolicyForm(res.body.policy);
+      toast('Elevated policy saved');
+      refreshLiveState();
+      loadAudit();
     });
   });
 
