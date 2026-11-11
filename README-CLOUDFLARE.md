@@ -1,18 +1,77 @@
-# Guardian Console — Cloudflare deployment
+# Guardian Console — Grand Final (Cloudflare Workers + D1)
 
-This version adapts the supplied Node.js demo to Cloudflare Workers + D1. Static pages are served from `frontend/`; `/api/*` is handled by `worker.js`; persistent data lives in D1.
+Parent dashboard for consent-based family device management.
 
-## Deploy (GitHub + Cloudflare dashboard)
-1. Create a GitHub repository and upload **all contents** of this folder (not the enclosing folder).
-2. In Cloudflare, open Workers & Pages → Create application → Pages/Workers Git integration (choose Workers, connect GitHub, select this repo).
-3. Build command: `npx wrangler deploy`; root directory: `/`; deploy command as shown by Cloudflare. If the dashboard asks for a build command, use `npx wrangler deploy` as the deploy command and leave build empty.
-4. Create a D1 database named `guardian-console-db` in Storage & databases → D1 SQL Database. Copy its database ID into `wrangler.jsonc` replacing `REPLACE_WITH_DATABASE_ID`.
-5. In the D1 database console, execute the full contents of `migrations/0001_init.sql` once. Add binding `DB` to the Worker pointing to that database if not auto-created from wrangler config. Assets binding is `ASSETS`.
-6. Deploy again. Open `/login.html`, create an account, and test login + child profile.
+## What is complete
 
-For CLI deployments, run `npx wrangler d1 create guardian-console-db`, copy the returned ID into `wrangler.jsonc`, then `npx wrangler d1 migrations apply guardian-console-db --remote` and `npx wrangler deploy`.
+- Parent signup / login (PBKDF2 passwords, 30-day sessions)
+- Children, enrollment links, device consent scopes
+- Screen-time policy, sample activity report, audit log
+- **Live screen streaming + remote control** with **strict controls**
+- Device **agent API** + command queue (ready for a native agent)
 
-## Important limitations
-- Dashboard report values are sample/demo data, not actual device telemetry. Real device monitoring requires a supported, consent-based Android/iOS integration; this web app cannot silently collect device activity.
-- Sessions expire after 30 days. Passwords use PBKDF2-SHA-256 via Web Crypto.
-- Keep the D1 database ID private-ish and never commit secrets or real user data. Use HTTPS (Cloudflare provides it).
+## Strict elevated features
+
+New scopes: `screen_stream`, `remote_control` (shown on `enroll.html`).
+
+Rules:
+
+1. Consent at enrollment  
+2. Policy toggles **off by default** (Settings → Elevated access)  
+3. Explicit confirm dialog before starting a session  
+4. Sessions auto-expire (default 5 min, max 15) in `controlSessions`  
+5. Commands go to `commandQueue` for the device agent  
+6. Full audit trail  
+
+## Demo vs production media
+
+| Layer | Status |
+|-------|--------|
+| Console, D1, policy, sessions, queue, audit | **Production-ready backend** |
+| Live pixels / lock / mute on a real phone | Needs **native agent** (see `AGENT.md`) |
+| UI without agent | Shows DEMO mock screen + “queued” commands |
+
+This web app **cannot** silently capture another device’s screen. That requires the child’s consented agent.
+
+## Deploy
+
+1. Push **all files at repo root** (not nested in an extra folder).  
+2. Cloudflare Workers: bind D1 `guardian-console-db`, set `database_id` in `wrangler.jsonc`.  
+3. Apply `migrations/0001_init.sql` (includes `controlSessions`, `commandQueue`, `agentToken`).  
+4. `npx wrangler deploy`  
+5. Open `/login.html` → account → child → enroll → enable elevated policy → **Live & control**.
+
+CLI sketch:
+
+```bash
+npx wrangler d1 create guardian-console-db
+# paste id into wrangler.jsonc
+npx wrangler d1 migrations apply guardian-console-db --remote
+npx wrangler deploy
+```
+
+## API map (parent Bearer session)
+
+- `POST /api/auth/signup|login|logout`
+- `GET /api/me`, `GET|POST /api/children`
+- `POST /api/children/:id/enroll-token`
+- `GET|POST /api/enroll/:token[/confirm]` — confirm returns `agentToken` once  
+- `GET/POST /api/devices/:id/stream|control|policy|…`
+- `GET /api/audit`
+
+## API map (device agent Bearer agentToken)
+
+Documented in **`AGENT.md`**:
+
+- `POST /api/agent/heartbeat`
+- `GET /api/agent/commands`
+- `POST /api/agent/commands/result`
+- `POST /api/agent/stream/signal`
+
+## Files
+
+- `worker.js` — all API routes  
+- `Frontend/` — login, enroll, console (including Live & control)  
+- `migrations/0001_init.sql`  
+- `AGENT.md` — native agent contract  
+- `wrangler.jsonc`
