@@ -32,7 +32,39 @@ const random = (n = 24) => {
   return btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
+
+let _schemaReady = false;
+async function ensureSchema(env) {
+  if (_schemaReady) return;
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS controlSessions (
+      id TEXT PRIMARY KEY, deviceId TEXT NOT NULL, parentId TEXT NOT NULL, kind TEXT NOT NULL,
+      status TEXT NOT NULL, startedAt TEXT NOT NULL, expiresAt TEXT NOT NULL, endedAt TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS commandQueue (
+      id TEXT PRIMARY KEY, deviceId TEXT NOT NULL, sessionId TEXT, command TEXT NOT NULL,
+      payload TEXT, status TEXT NOT NULL, createdAt TEXT NOT NULL, deliveredAt TEXT, result TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS control_sessions_device_idx ON controlSessions(deviceId,status)`,
+    `CREATE INDEX IF NOT EXISTS command_queue_device_idx ON commandQueue(deviceId,status)`
+  ];
+  for (const sql of stmts) {
+    try { await env.DB.prepare(sql).run(); } catch (e) { console.log('schema', String(e && e.message || e)); }
+  }
+  try {
+    const { results = [] } = await env.DB.prepare('PRAGMA table_info(devices)').all();
+    const cols = new Set(results.map((r) => r.name));
+    if (!cols.has('agentToken')) {
+      await env.DB.prepare('ALTER TABLE devices ADD COLUMN agentToken TEXT').run();
+    }
+  } catch (e) {
+    console.log('agentToken column', String(e && e.message || e));
+  }
+  _schemaReady = true;
+}
+
 async function auth(req, env) {
+
   const h = req.headers.get('authorization') || '';
   if (!h.startsWith('Bearer ')) return null;
   return await env.DB.prepare(
@@ -57,7 +89,10 @@ async function ownedDevice(env, parentId, deviceId) {
 
 async function devicesForChild(env, childId) {
   const { results = [] } = await env.DB.prepare('SELECT * FROM devices WHERE childId=?').bind(childId).all();
-  return results.map((d) => ({ ...d, grantedScopes: JSON.parse(d.grantedScopes || '[]') }));
+  return results.map((d) => {
+    const { agentToken, ...rest } = d;
+    return { ...rest, grantedScopes: JSON.parse(d.grantedScopes || '[]') };
+  });
 }
 
 function hasScope(device, scope) {
@@ -127,6 +162,7 @@ function defaultPolicy() {
 }
 
 async function route(req, env) {
+  await ensureSchema(env);
   const u = new URL(req.url);
   const p = u.pathname;
   const m = req.method;
@@ -206,9 +242,17 @@ async function route(req, env) {
       grantedScopes: JSON.stringify(scopes),
       agentToken
     };
-    await env.DB.prepare(
-      'INSERT INTO devices(id,childId,platform,managementMode,status,lastSeenAt,grantedScopes,agentToken) VALUES(?,?,?,?,?,?,?,?)'
-    ).bind(device.id, device.childId, device.platform, device.managementMode, device.status, device.lastSeenAt, device.grantedScopes, device.agentToken).run();
+    try {
+      await env.DB.prepare(
+        'INSERT INTO devices(id,childId,platform,managementMode,status,lastSeenAt,grantedScopes,agentToken) VALUES(?,?,?,?,?,?,?,?)'
+      ).bind(device.id, device.childId, device.platform, device.managementMode, device.status, device.lastSeenAt, device.grantedScopes, device.agentToken).run();
+    } catch (e) {
+      // Fallback if agentToken column still missing
+      console.log('device insert fallback', String(e && e.message || e));
+      await env.DB.prepare(
+        'INSERT INTO devices(id,childId,platform,managementMode,status,lastSeenAt,grantedScopes) VALUES(?,?,?,?,?,?,?)'
+      ).bind(device.id, device.childId, device.platform, device.managementMode, device.status, device.lastSeenAt, device.grantedScopes).run();
+    }
     for (const s of scopes) {
       await env.DB.prepare('INSERT INTO consentRecords(id,deviceId,scope,grantedAt) VALUES(?,?,?,?)')
         .bind(id('consent'), device.id, s, now()).run();
@@ -355,7 +399,7 @@ async function route(req, env) {
       'INSERT INTO enrollTokens(id,token,childId,createdByParentId,expiresAt) VALUES(?,?,?,?,?)'
     ).bind(id('etok'), token, c.id, par.id, expiresAt).run();
     await audit(env, par.id, 'enrollment_token_issued', c.name);
-    return json({ token, enrollUrl: '/enroll.html?token=' + token, expiresAt, scopes: SCOPES }, 201);
+    return json({ token, enrollUrl: '/enroll?token=' + token, expiresAt, scopes: SCOPES }, 201);
   }
 
   // Device sub-routes
