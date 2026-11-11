@@ -43,7 +43,9 @@
     app_list: ['Installed apps & screen time', "Which apps are installed and how long they're used each day."],
     location: ['Approximate location', 'Where this device is, to show on the family map and trigger place alerts.'],
     web_filter: ['Web filtering', 'Sites are filtered in the managed browser and visit counts by site are shared, not full page-by-page history.'],
-    screen_time: ['Screen time controls', 'Daily limits and downtime schedules can be set remotely.']
+    screen_time: ['Screen time controls', 'Daily limits and downtime schedules can be set remotely.'],
+    screen_stream: ['Live screen view', 'Parent can start a short, audited live view of this screen. A notice is shown on the device while streaming.'],
+    remote_control: ['Remote control', 'Parent can lock the device, show alerts, mute media, or request a screenshot during a short, audited session.']
   };
 
   var card = document.getElementById('card');
@@ -104,7 +106,7 @@
       '<div class="tick">&#10003;</div>' +
       '<h1>Enrolled</h1>' +
       '<p class="sub">This device now appears in the parent dashboard for ' + escapeHtml(childName) + '.</p>' +
-      '<div class="persist-banner">On a real device this would show a permanent "Managed by [parent]" notice in Settings. In this demo, nothing further is installed on this browser.</div>' +
+      '<div class="persist-banner">On a real device the Guardian <b>agent</b> would store a one-time agent token, show a permanent “Managed by parent” notice, and connect to /api/agent for live view &amp; control. In this browser demo, nothing further is installed — see AGENT.md in the project.</div>' +
       '</div>'
     );
   }
